@@ -21,7 +21,6 @@
 // consuming application (docforum-core), never here.
 #![no_std]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, Address, BytesN, Env, String};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env,
     IntoVal, String, Vec,
@@ -71,13 +70,6 @@ pub struct EscrowData {
     /// anyone — still only to `refund_to`. `None` means no timeout,
     /// behaviour identical to before this field existed — see docs/adr/0004.
     pub refund_after: Option<u64>,
-    /// Optional deadline (unix seconds) after which `release` opens to
-    /// anyone — always to `payee`. `None` means no auto-release. Must be
-    /// strictly before `refund_after` when both are set.
-    pub release_after: Option<u64>,
-    /// Optional hash of off-chain terms (BytesN<32>), immutable once stored
-    /// at creation. Contract never interprets it (ADR 0001).
-    pub terms_hash: Option<BytesN<32>>,
     /// If true, invoke the contract payee's `on_escrow_released` hook after
     /// the payout transfer. A failed callback reverts the whole release.
     pub notify_payee: bool,
@@ -113,9 +105,6 @@ pub enum Error {
     /// docs/adr/0004: a deadline that has already passed would let
     /// anyone refund the escrow before the releaser could ever act.
     InvalidRefundAfter = 5,
-    /// `release_after` must be strictly in the future, and earlier than
-    /// `refund_after` when both are set (docs/adr E5).
-    InvalidReleaseAfter = 7,
     /// The contract's token balance didn't rise by exactly `amount`
     /// across `create_escrow`'s transfer (a lying or short-delivering
     /// token) — see docs/threat-model.md T5.
@@ -193,37 +182,6 @@ impl EscrowContract {
         amount: i128,
         condition_ref: String,
         releaser: Address,
-         refund_after: Option<u64>,
-         release_after: Option<u64>,
-         terms_hash: Option<BytesN<32>>,
-     ) -> Result<u64, Error> {
-         if amount <= 0 {
-             return Err(Error::InvalidAmount);
-         }
-         if let Some(deadline) = refund_after {
-             if deadline <= env.ledger().timestamp() {
-                 return Err(Error::InvalidRefundAfter);
-             }
-         }
-         if let Some(deadline) = release_after {
-             if deadline <= env.ledger().timestamp() {
-                 return Err(Error::InvalidReleaseAfter);
-             }
-             if let Some(refund) = refund_after {
-                 if deadline >= refund {
-                     return Err(Error::InvalidReleaseAfter);
-                 }
-             }
-         }
-        payer.require_auth();
-
-        let token_client = token::Client::new(&env, &token);
-        let contract_address = env.current_contract_address();
-        let balance_before = token_client.balance(&contract_address);
-        token_client.transfer(&payer, &contract_address, &amount);
-        let balance_after = token_client.balance(&contract_address);
-        if balance_after.checked_sub(balance_before) != Some(amount) {
-            return Err(Error::BalanceMismatch);
         refund_after: Option<u64>,
         notify_payee: bool,
         refund_to: Option<Address>,
@@ -371,14 +329,6 @@ impl EscrowContract {
             token,
             amount,
             condition_ref,
-            status: EscrowStatus::Funded,
-             releaser,
-             refund_after,
-             release_after,
-             terms_hash,
-         };
-        env.storage().persistent().set(&DataKey::Escrow(id), &data);
-        Ok(id)
             releasers,
             threshold,
             refund_after,
@@ -429,11 +379,6 @@ impl EscrowContract {
             .get(&DataKey::Escrow(escrow_id))
             .ok_or(Error::NotFound)?;
 
-        let release_timeout_passed = match data.release_after {
-            Some(deadline) => env.ledger().timestamp() >= deadline,
-            None => false,
-        };
-        if caller != data.releaser && !release_timeout_passed {
         if data.threshold != 1 {
             return Err(Error::ThresholdNotMet);
         }
