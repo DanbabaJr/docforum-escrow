@@ -32,6 +32,13 @@ jobs:
       - name: cargo test
         run: cargo test
 
+      # Issue #133: every lifecycle test in this suite runs against the
+      # native SAC, an issued-asset SAC and a custom SEP-41 token at 6 and
+      # 18 decimals. `cargo test` already covers it; the named step makes
+      # the suite visible in the check list. See docs/token-conformance.md.
+      - name: Token conformance suite
+        run: cargo test --test token_conformance
+
       - name: cargo build --release (wasm)
         run: cargo build --target wasm32v1-none --release
 

@@ -57,6 +57,14 @@ T2): instead of locking funds permanently, a deadline lets anyone return
 them to the payer. See [ADR 0004](docs/adr/0004-timeout-refund-path.md)
 for the decision and what it means for payees.
 
+**Token compatibility:** any SEP-41 token works — native XLM through the
+native SAC, an issued-asset SAC (e.g. USDC), or a custom SEP-41
+implementation. Amounts are raw token units, so integrators scale by
+`decimals()`; the contract never rescales or rounds. Every lifecycle is
+conformance-tested against all three shapes (plus 6- and 18-decimal
+tokens) — per-token behaviour, the test matrix and recommended tokens are
+in [`docs/token-conformance.md`](docs/token-conformance.md).
+
 **Design rule, enforced deliberately:** the contract decides **who** may
 call `release`/`refund`, never **why**. `condition_ref` is an opaque
 string the contract stores but never interprets — all domain
@@ -107,8 +115,12 @@ Requires a Rust toolchain with the `wasm32v1-none` target.
 git clone https://github.com/DocForum/docforum-escrow.git
 cd docforum-escrow/contracts/escrow
 
-# Run the test suite (28 tests, all passing today)
+# Run the test suite (45 tests, all passing today)
 cargo test
+
+# Token conformance suite only — every lifecycle against native SAC,
+# issued-asset SAC and custom SEP-41 tokens at 6 and 18 decimals
+cargo test --test token_conformance
 
 # Build the deployable contract
 cargo build --target wasm32v1-none --release
@@ -132,6 +144,7 @@ The TypeScript SDK (`sdk/`) is still a placeholder — see
 | [`ROADMAP.md`](ROADMAP.md) | Phase E1–E4 breakdown and current status. |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | Rules for coding agents working in this repo — read `README.md` + `ARCHITECTURE_ESSENTIALS.md` first; you should rarely need `docforum-core`'s docs to work here. |
 | [`docs/adr/0001-generic-escrow-not-healthcare-specific.md`](docs/adr/0001-generic-escrow-not-healthcare-specific.md) | Why the contract stays domain-blind. |
+| [`docs/token-conformance.md`](docs/token-conformance.md) | Token conformance suite: native SAC, issued-asset SAC and custom SEP-41 (6/18 decimals), per-token behaviour table, recommended tokens for integrators. |
 
 ## Project status
 

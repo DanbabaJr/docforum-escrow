@@ -3,7 +3,7 @@
 > Update this file on every contribution that starts/completes/blocks an
 > item below.
 
-**Status: Phase E1 done. Phase E2 done and live on testnet. Phase E3's `create_escrow`/`get_status`/`release`/`refund` wrapping done; SDK distribution decided (issue #5 closed — GitHub Release tarball, ADR 0003). Phase E4 (security review, issue #6) in progress: threat model drafted (`docs/threat-model.md`) and the timeout-refund item closed (issue #11 — ADR 0004 + implementation, live on testnet); independent review not yet done — blocking for any mainnet use.**
+**Status: Phase E1 done. Phase E2 done and live on testnet. Phase E7's token conformance suite done (issue #133 — every lifecycle now runs against native SAC, issued-asset SAC and custom SEP-41 tokens at 6 and 18 decimals). Phase E3's `create_escrow`/`get_status`/`release`/`refund` wrapping done; SDK distribution decided (issue #5 closed — GitHub Release tarball, ADR 0003). Phase E4 (security review, issue #6) in progress: threat model drafted (`docs/threat-model.md`) and the timeout-refund item closed (issue #11 — ADR 0004 + implementation, live on testnet); independent review not yet done — blocking for any mainnet use.**
 
 ## Phase E1 — Contract skeleton
 - [x] Soroban project scaffold (`contracts/escrow`), builds to wasm
@@ -121,6 +121,20 @@
 - [ ] Related, not in the checklist: [#13](https://github.com/DocForum/docforum-escrow/issues/13) `get_escrow`
   full-record read (Medium), [#14](https://github.com/DocForum/docforum-escrow/issues/14) offline SDK unit tests in CI
   (Medium).
+
+## Phase E7 — Verification, testing & release engineering
+- [x] Token conformance suite (issue #133). `contracts/escrow/tests/
+  token_conformance.rs` runs every lifecycle test against four token
+  implementations: the native SAC, an issued-asset SAC with no issuer
+  flags, and a test-only SEP-41 contract at 6 and 18 decimals. The suite
+  asserts amounts are stored and paid in raw units (no rescaling or
+  rounding at any precision, including 1.5 tokens at 6 decimals), that
+  every variant reports the decimals in the behaviour table, and that the
+  custom implementations expose the full SEP-41 surface. Per-token
+  behaviour differences and recommended integrator tokens are recorded in
+  [`docs/token-conformance.md`](docs/token-conformance.md); the suite runs
+  as its own step in the contract CI job. No contract change. 45/45
+  contract tests and the wasm release build pass. Closes issue #133.
 
 ## Explicitly out of scope for this repo
 - Any healthcare-specific logic (see README).
@@ -286,6 +300,21 @@
   (§1 invariants, T2, T8, §6) updated. **Not done:** publishing the
   `sdk-v0.3.0` release tarball per ADR 0003 — that's the follow-up step
   before `docforum-core` can consume it.
+- 2026-11-22 — Closed issue #133 (Phase E7): added the token conformance
+  suite. `contracts/escrow/tests/token_conformance.rs` parameterises every
+  escrow lifecycle over `TokenKind::ALL` — native SAC (funded through a
+  classic account entry, since native XLM has no admin to mint), an
+  issued-asset SAC with no issuer flags, and a test-only SEP-41 contract
+  at 6 and 18 decimals. The suite pins raw-unit amount handling (no
+  rescaling or rounding; 1.5 tokens at 6 decimals round-trips exactly),
+  asserts the decimals and no-flags facts behind the behaviour table, and
+  proves the custom variants really implement `approve`/`transfer_from`/
+  `burn`. New `docs/token-conformance.md` records the per-token behaviour
+  differences, the lifecycle matrix and the tokens recommended for
+  integrators (USDC's issued-asset SAC, native XLM, and SEP-41 tokens
+  that revert on insufficient balance and charge no transfer fee). CI
+  runs the suite as a named step; no contract change, 45/45 tests and
+  the wasm release build pass.
 - 2026-10-08 — Fixed `main` failing to compile after #17 and #18 merged
   minutes apart: both added an error variant numbered 5, and the merge
   kept #18's `InvalidRefundAfter = 5` and dropped #17's
